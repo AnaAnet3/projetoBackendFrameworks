@@ -437,7 +437,6 @@ function cartaoDeResumo(rotulo, valor, classe = '') {
 
 function resumoDoHistorico(compras) {
   const totalGasto = compras.reduce((soma, c) => soma + Number(c.totalGasto), 0);
-  const economia = compras.reduce((soma, c) => soma + economiaDaCompra(c), 0);
   const media = totalGasto / compras.length;
 
   return `
@@ -445,7 +444,6 @@ function resumoDoHistorico(compras) {
       ${cartaoDeResumo('Compras concluídas', compras.length)}
       ${cartaoDeResumo('Total gasto', moeda(totalGasto))}
       ${cartaoDeResumo('Média por compra', moeda(media))}
-      ${cartaoDeResumo(economia >= 0 ? 'Economizado' : 'Acima do estimado', moeda(Math.abs(economia)), economia >= 0 ? 'bom' : 'ruim')}
     </div>`;
 }
 
