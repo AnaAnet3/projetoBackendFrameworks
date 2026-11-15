@@ -14,7 +14,9 @@ import com.projetobackend.listify.repository.ListaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -47,6 +49,7 @@ public class ListaService {
     public ListaResponse criar(ListaRequest request) {
         Lista lista = new Lista();
         lista.setNome(request.nome().trim());
+        lista.setLimite(request.limite());
         return ListaResponse.de(listas.save(lista));
     }
 
@@ -55,6 +58,7 @@ public class ListaService {
         Lista lista = obterLista(id);
         validarAberta(lista, "Não é possível editar uma lista concluída.");
         lista.setNome(request.nome().trim());
+        lista.setLimite(request.limite());
         return ListaResponse.de(listas.save(lista));
     }
 
@@ -68,30 +72,43 @@ public class ListaService {
     @Transactional
     public ListaResponse duplicar(Long id) {
         Lista original = obterLista(id);
-        Lista copia = new Lista();
-        String nome = original.getNome();
-        if (nome.length() > 240) nome = nome.substring(0, 240);
-        copia.setNome(nome + " (cópia)");
-        copia = listas.save(copia);
-
-        for (ItemLista antigo : itens.findByListaIdOrderByProdutoNomeAsc(id)) {
-            ItemLista novo = new ItemLista();
-            novo.setLista(copia);
-            novo.setProduto(antigo.getProduto());
-            novo.setQuantidade(antigo.getQuantidade());
-            novo.setUnidade(antigo.getUnidade());
-            novo.setPrecoEstimado(antigo.getPrecoEstimado());
-            novo.setPrecoPago(null);
-            novo.setComprado(false);
-            itens.save(novo);
-        }
+        Lista copia = novaListaBaseadaEm(original, nomeComSufixo(original.getNome(), " (cópia)"), false);
+        copiarItens(original, copia);
         return ListaResponse.de(copia);
+    }
+
+    /** Guarda uma cópia da lista como modelo (ex.: "Compra do mês"), com os mesmos itens e limite. */
+    @Transactional
+    public ListaResponse salvarComoModelo(Long id) {
+        Lista original = obterLista(id);
+        if (original.isModelo()) {
+            throw new ConflitoException("Esta lista já é um modelo.");
+        }
+        Lista modelo = novaListaBaseadaEm(original, nomeComSufixo(original.getNome(), ""), true);
+        copiarItens(original, modelo);
+        return ListaResponse.de(modelo);
+    }
+
+    /** Gera uma lista nova e ativa a partir de um modelo, com a data de hoje no nome. */
+    @Transactional
+    public ListaResponse usarModelo(Long id) {
+        Lista modelo = obterLista(id);
+        if (!modelo.isModelo()) {
+            throw new ConflitoException("Esta lista não é um modelo.");
+        }
+        String data = LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        Lista nova = novaListaBaseadaEm(modelo, nomeComSufixo(modelo.getNome(), " - " + data), false);
+        copiarItens(modelo, nova);
+        return ListaResponse.de(nova);
     }
 
     /** Conclui a lista e registra no histórico. */
     @Transactional
     public ListaResponse concluir(Long id) {
         Lista lista = obterLista(id);
+        if (lista.isModelo()) {
+            throw new ConflitoException("Um modelo não pode ser concluído. Use-o para criar uma lista nova.");
+        }
         if (!Lista.CONCLUIDA.equals(lista.getStatus())) {
             LocalDateTime agora = LocalDateTime.now();
             lista.setStatus(Lista.CONCLUIDA);
@@ -118,6 +135,40 @@ public class ListaService {
         return registros.stream()
                 .map(h -> HistoricoResponse.de(h, itensPorLista.getOrDefault(h.getListaId(), List.of())))
                 .toList();
+    }
+
+    /** Lista nova (salva) com o limite da original; modelo diz se a nova também é um modelo. */
+    private Lista novaListaBaseadaEm(Lista original, String nome, boolean modelo) {
+        Lista nova = new Lista();
+        nova.setNome(nome);
+        nova.setLimite(original.getLimite());
+        nova.setModelo(modelo);
+        return listas.save(nova);
+    }
+
+    /** Copia os itens (produto, quantidade, preço estimado, marca, observação e prioridade) sem o estado de compra. */
+    private void copiarItens(Lista origem, Lista destino) {
+        for (ItemLista antigo : itens.findByListaIdOrderByProdutoNomeAsc(origem.getId())) {
+            ItemLista novo = new ItemLista();
+            novo.setLista(destino);
+            novo.setProduto(antigo.getProduto());
+            novo.setQuantidade(antigo.getQuantidade());
+            novo.setUnidade(antigo.getUnidade());
+            novo.setPrecoEstimado(antigo.getPrecoEstimado());
+            novo.setMarca(antigo.getMarca());
+            novo.setObservacao(antigo.getObservacao());
+            novo.setPrioridade(antigo.getPrioridade());
+            novo.setPrecoPago(null);
+            novo.setComprado(false);
+            itens.save(novo);
+        }
+    }
+
+    /** Garante que nome + sufixo cabem na coluna (255). */
+    private String nomeComSufixo(String nome, String sufixo) {
+        int maximo = 255 - sufixo.length();
+        String base = nome.length() > maximo ? nome.substring(0, maximo) : nome;
+        return base + sufixo;
     }
 
     private Lista obterLista(Long id) {

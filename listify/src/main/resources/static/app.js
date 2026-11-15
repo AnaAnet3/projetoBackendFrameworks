@@ -2,6 +2,10 @@ const app = document.querySelector('#app');
 
 const UNIDADES = { un: 'un', kg: 'kg', g: 'g', L: 'L', pacote: 'pct' };
 
+const PRIORIDADES = [['NORMAL', 'Normal'], ['IMPORTANTE', 'Importante'], ['ESSENCIAL', 'Essencial']];
+const ROTULO_PRIORIDADE = { IMPORTANTE: 'Importante', ESSENCIAL: 'Essencial' };
+const PESO_PRIORIDADE = { ESSENCIAL: 0, IMPORTANTE: 1, NORMAL: 2 };
+
 let modoMercado = false;
 let timerAviso;
 
@@ -64,9 +68,16 @@ async function api(caminho, metodo = 'GET', corpo) {
   }
 
   if (!resposta.ok) {
-    throw new Error(json?.erro || 'Não foi possível falar com o servidor.');
+    const erroDeCampo = Object.values(json?.campos ?? {})[0];
+    throw new Error(erroDeCampo || json?.erro || 'Não foi possível falar com o servidor.');
   }
   return json;
+}
+
+async function apiTexto(caminho) {
+  const resposta = await fetch(caminho);
+  if (!resposta.ok) throw new Error('Não foi possível gerar o texto da lista.');
+  return resposta.text();
 }
 
 function mostrarAviso(mensagem, sucesso = false) {
@@ -98,7 +109,8 @@ function campoDialogo(campo) {
     ? `<select name="${campo.nome}">${campo.select}</select>`
     : `<input name="${campo.nome}" type="${campo.tipo || 'text'}" step="any" min="0"
         value="${escapar(campo.valor ?? '')}" ${campo.obrigatorio ? 'required' : ''}>`;
-  return `<label>${escapar(campo.rotulo)}${controle}</label>`;
+  const dica = campo.comDica ? '<small class="dica mudo peq"></small>' : '';
+  return `<label>${escapar(campo.rotulo)}${controle}${dica}</label>`;
 }
 
 function abrirDialogo(titulo, campos, aoSalvar) {
@@ -129,17 +141,31 @@ function abrirDialogo(titulo, campos, aoSalvar) {
 
 /* ---------- tela: minhas listas ---------- */
 
-function botoesDaLista(lista) {
-  const renomearEConcluir = `
-    <button class="btn" title="Renomear" data-act="renomear" data-id="${lista.id}" data-nome="${escapar(lista.nome)}">✏️</button>
-    <button class="btn" title="Concluir" data-act="concluir" data-id="${lista.id}">✅</button>`;
+function dadosDaLista(lista) {
+  return `data-id="${lista.id}" data-nome="${escapar(lista.nome)}" data-limite="${lista.limite ?? ''}"`;
+}
 
+function botoesDaLista(lista) {
   return `
     <div class="acoes">
-      ${renomearEConcluir}
+      <button class="btn" title="Editar nome e limite" data-act="renomear" ${dadosDaLista(lista)}>✏️</button>
+      <button class="btn" title="Concluir" data-act="concluir" data-id="${lista.id}">✅</button>
       <button class="btn" title="Duplicar" data-act="duplicar" data-id="${lista.id}">📋</button>
-      <button class="btn perigo" title="Excluir" data-act="excluir" data-id="${lista.id}" data-nome="${escapar(lista.nome)}">🗑️</button>
+      <button class="btn" title="Salvar como modelo" data-act="salvarModelo" data-id="${lista.id}">📌</button>
+      <button class="btn perigo" title="Excluir" data-act="excluir" ${dadosDaLista(lista)}>🗑️</button>
     </div>`;
+}
+
+/** Selo com a situação do orçamento (vazio se a lista não tem limite). */
+function seloOrcamento(total) {
+  const limite = total.limite != null ? moeda(total.limite) : '';
+  switch (total.situacaoOrcamento) {
+    case 'GASTO_ESTOUROU': return `<span class="dif ruim">Gasto acima do limite · ${limite}</span>`;
+    case 'ESTIMADO_ESTOUROU': return `<span class="dif ruim">Estimado acima do limite · ${limite}</span>`;
+    case 'PERTO_DO_LIMITE': return `<span class="dif aviso">Perto do limite · ${limite}</span>`;
+    case 'DENTRO': return `<span class="dif bom">Dentro do limite · ${limite}</span>`;
+    default: return '';
+  }
 }
 
 function cartaoDaLista({ lista, total }) {
@@ -153,16 +179,35 @@ function cartaoDaLista({ lista, total }) {
           <span>Estimado <b>${moeda(total.totalEstimado)}</b></span>
           <span>Gasto <b style="color:var(--pri)">${moeda(total.totalGasto)}</b></span>
         </div>
+        ${total.limite != null ? `<p style="margin:.6rem 0 0">${seloOrcamento(total)}</p>` : ''}
       </a>
       ${botoesDaLista(lista)}
     </div>`;
 }
 
+function cartaoDoModelo({ lista, total }) {
+  const limite = lista.limite != null ? ` · limite ${moeda(lista.limite)}` : '';
+  return `
+    <div class="card modelo">
+      <a href="#/lista/${lista.id}">
+        <h3>${escapar(lista.nome)} <span class="etiqueta">Modelo</span></h3>
+        <p class="mudo peq">${total.totalItens} itens · estimado ${moeda(total.totalEstimado)}${limite}</p>
+      </a>
+      <div class="acoes">
+        <button class="btn pri" data-act="usarModelo" data-id="${lista.id}">Usar modelo</button>
+        <button class="btn" title="Editar nome e limite" data-act="renomear" ${dadosDaLista(lista)}>✏️</button>
+        <button class="btn perigo" title="Excluir" data-act="excluir" ${dadosDaLista(lista)}>🗑️</button>
+      </div>
+    </div>`;
+}
+
 async function telaHome() {
-  // as listas concluídas ficam na página de histórico
-  const listas = (await api('/listas')).filter((lista) => lista.status === 'ATIVA');
-  const totais = await Promise.all(listas.map((l) => api(`/listas/${l.id}/total`)));
-  const ativas = listas.map((lista, i) => ({ lista, total: totais[i] }));
+  // as listas concluídas ficam na página de histórico; os modelos têm seção própria
+  const abertas = (await api('/listas')).filter((lista) => lista.status === 'ATIVA');
+  const totais = await Promise.all(abertas.map((l) => api(`/listas/${l.id}/total`)));
+  const cartoes = abertas.map((lista, i) => ({ lista, total: totais[i] }));
+  const ativas = cartoes.filter(({ lista }) => !lista.modelo);
+  const modelos = cartoes.filter(({ lista }) => lista.modelo);
 
   app.innerHTML = `
     <div class="topo-pag">
@@ -172,6 +217,8 @@ async function telaHome() {
       </div>
       <form class="linha" data-form="criar">
         <input name="nome" placeholder="Nome da nova lista" maxlength="120" required style="width:16rem">
+        <input name="limite" type="number" min="0.01" step="0.01" placeholder="Limite (R$)"
+          aria-label="Limite de gasto (opcional)" style="width:9rem">
         <button class="btn pri">+ Criar</button>
       </form>
     </div>
@@ -179,6 +226,12 @@ async function telaHome() {
     ${ativas.length
       ? `<div class="grade">${ativas.map(cartaoDaLista).join('')}</div>`
       : '<p class="vazio">Nenhuma lista ativa. Crie uma acima!</p>'}
+
+    ${modelos.length ? `
+      <h2 class="secao">📌 Modelos</h2>
+      <p class="mudo peq" style="margin:0 0 1rem">Listas prontas para reutilizar, como a "Compra do mês". Use um modelo para criar uma lista nova com os mesmos itens.</p>
+      <div class="grade">${modelos.map(cartaoDoModelo).join('')}</div>`
+      : '<p class="mudo peq" style="margin-top:1.5rem">Dica: use 📌 em uma lista para guardá-la como modelo e reaproveitá-la todo mês.</p>'}
 
     <p class="mudo peq" style="margin-top:1.5rem">
       As listas concluídas ficam no <a href="#/historico" style="text-decoration:underline">histórico de compras</a>.
@@ -188,48 +241,120 @@ async function telaHome() {
 
 /* ---------- tela: detalhe da lista ---------- */
 
-function linhaDoItem(item, listaId, ativa) {
+function linhaDoItem(item, listaId, ativa, modelo) {
   const unidade = UNIDADES[item.unidade] || escapar(item.unidade);
   const precoPago = item.comprado && item.precoPago != null ? ` · pago ${moeda(item.precoPago)}` : '';
   const subtotal = item.quantidade * (item.precoPago ?? item.precoEstimado ?? 0);
 
+  const marca = item.marca ? ` <span class="marca">${escapar(item.marca)}</span>` : '';
+  const rotulo = ROTULO_PRIORIDADE[item.prioridade];
+  const selo = rotulo ? ` <span class="tag ${item.prioridade.toLowerCase()}">${rotulo}</span>` : '';
+  const observacao = item.observacao ? `<div class="obs peq">📝 ${escapar(item.observacao)}</div>` : '';
+
   const botoesEdicao = `
     <div class="edita">
       <button class="btn" data-act="editar" data-id="${listaId}" data-item="${item.id}"
-        data-q="${item.quantidade}" data-u="${item.unidade}" data-p="${item.precoEstimado ?? ''}">✏️</button>
+        data-q="${item.quantidade}" data-u="${item.unidade}" data-p="${item.precoEstimado ?? ''}"
+        data-m="${escapar(item.marca ?? '')}" data-o="${escapar(item.observacao ?? '')}" data-pr="${item.prioridade}">✏️</button>
       <button class="btn perigo" data-act="remover" data-id="${listaId}" data-item="${item.id}">🗑️</button>
     </div>`;
 
-  return `
-    <li class="item ${item.comprado ? 'c' : ''}">
+  // modelos não são "comprados": sem a bolinha de marcar
+  const marcador = modelo ? '' : `
       <button class="chk" ${ativa ? '' : 'disabled'} data-act="toggle" data-id="${listaId}" data-item="${item.id}"
-        data-comprado="${item.comprado}" data-estimado="${item.precoEstimado ?? ''}" aria-label="Marcar como comprado">${item.comprado ? '✓' : ''}</button>
+        data-comprado="${item.comprado}" data-estimado="${item.precoEstimado ?? ''}" data-produto="${escapar(item.produto)}" aria-label="Marcar como comprado">${item.comprado ? '✓' : ''}</button>`;
+
+  return `
+    <li class="item ${item.comprado ? 'c' : ''}">${marcador}
       <div class="info">
-        <div class="nome">${escapar(item.produto)}</div>
+        <div><span class="nome">${escapar(item.produto)}</span>${marca}${selo}</div>
         <div class="mudo peq">${item.quantidade} ${unidade} × ${moeda(item.precoEstimado)}${precoPago}</div>
+        ${observacao}
       </div>
       <b>${moeda(subtotal)}</b>
       ${ativa ? botoesEdicao : ''}
     </li>`;
 }
 
-function grupoDeCategoria(grupo, listaId, ativa) {
-  // itens já comprados vão para o fim do grupo
-  const itens = [...grupo.itens].sort((a, b) => Number(a.comprado) - Number(b.comprado));
+function grupoDeCategoria(grupo, listaId, ativa, modelo) {
+  // comprados vão para o fim do grupo; entre os demais, os mais prioritários primeiro
+  const itens = [...grupo.itens].sort((a, b) =>
+    Number(a.comprado) - Number(b.comprado)
+    || (PESO_PRIORIDADE[a.prioridade] ?? 2) - (PESO_PRIORIDADE[b.prioridade] ?? 2));
   return `
     <h2 class="cat">${escapar(grupo.categoria)}</h2>
-    <ul class="itens">${itens.map((item) => linhaDoItem(item, listaId, ativa)).join('')}</ul>`;
+    <ul class="itens">${itens.map((item) => linhaDoItem(item, listaId, ativa, modelo)).join('')}</ul>`;
 }
 
-function painelDeTotais(total) {
+/* ----- orçamento ----- */
+
+function mensagemOrcamento(total) {
+  const limite = total.limite;
+  switch (total.situacaoOrcamento) {
+    case 'GASTO_ESTOUROU':
+      return { classe: 'erro', texto: `🚨 Você já gastou ${moeda(total.totalGasto - limite)} acima do limite de ${moeda(limite)}.` };
+    case 'ESTIMADO_ESTOUROU':
+      return { classe: 'erro', texto: `⚠️ O total estimado passa ${moeda(total.totalEstimado - limite)} do limite de ${moeda(limite)}.` };
+    case 'PERTO_DO_LIMITE':
+      return { classe: 'aviso', texto: `⚠️ Atenção: você está perto do limite de ${moeda(limite)}.` };
+    default:
+      return null;
+  }
+}
+
+function bannerOrcamento(total) {
+  const aviso = mensagemOrcamento(total);
+  return aviso ? `<div class="banner ${aviso.classe}" role="alert">${escapar(aviso.texto)}</div>` : '';
+}
+
+function linhaOrcamento(rotulo, valor, limite) {
+  const razao = valor / limite;
+  const classe = razao > 1 ? 'erro' : razao >= 0.9 ? 'aviso' : '';
+  return `
+    <div class="l"><span>${rotulo}</span><b>${moeda(valor)} · ${Math.round(razao * 100)}%</b></div>
+    <div class="barra orc ${classe}"><i style="width:${Math.min(100, razao * 100)}%"></i></div>`;
+}
+
+function blocoOrcamento(total) {
+  if (total.limite == null) return '';
+  return `
+    <div class="orc-bloco">
+      <div class="l"><span>Limite</span><b>${moeda(total.limite)}</b></div>
+      ${linhaOrcamento('Estimado', total.totalEstimado, total.limite)}
+      ${linhaOrcamento('Gasto', total.totalGasto, total.limite)}
+    </div>`;
+}
+
+function painelDeTotais(total, modelo) {
+  const compras = modelo
+    ? `<p class="peq" style="margin:1rem 0 0">${total.totalItens} itens no modelo</p>`
+    : `
+      <div class="l"><span>Gasto</span><b>${moeda(total.totalGasto)}</b></div>
+      <div class="l"><span>Diferença</span><b>${moeda(total.totalEstimado - total.totalGasto)}</b></div>
+      <p class="peq" style="margin:1rem 0 0">${total.itensComprados} de ${total.totalItens} itens comprados</p>
+      <div class="barra"><i style="width:${percentual(total)}%"></i></div>`;
+
   return `
     <div class="tot">
       <h2>Totais</h2>
       <div class="l"><span>Estimado</span><b>${moeda(total.totalEstimado)}</b></div>
-      <div class="l"><span>Gasto</span><b>${moeda(total.totalGasto)}</b></div>
-      <div class="l"><span>Diferença</span><b>${moeda(total.totalEstimado - total.totalGasto)}</b></div>
-      <p class="peq" style="margin:1rem 0 0">${total.itensComprados} de ${total.totalItens} itens comprados</p>
-      <div class="barra"><i style="width:${percentual(total)}%"></i></div>
+      ${compras}
+      ${blocoOrcamento(total)}
+    </div>`;
+}
+
+/* ----- exportar e compartilhar ----- */
+
+function blocoExportar(id) {
+  return `
+    <div class="exportar no-print">
+      <h2 class="cat">Exportar e compartilhar</h2>
+      <div class="dois">
+        <button class="btn" data-act="imprimir">🖨️ PDF / imprimir</button>
+        <a class="btn" href="/listas/${id}/exportar/csv" download>📊 CSV</a>
+        <button class="btn" data-act="whatsapp" data-id="${id}">💬 WhatsApp</button>
+        <button class="btn" data-act="copiarTexto" data-id="${id}">📋 Copiar texto</button>
+      </div>
     </div>`;
 }
 
@@ -240,77 +365,81 @@ async function telaDetalhe(id) {
     api(`/listas/${id}/total`),
   ]);
   const ativa = lista.status === 'ATIVA';
+  const modelo = lista.modelo;
+  const situacao = modelo ? 'Modelo' : ativa ? 'Ativa' : 'Concluída';
 
-  const acoesDoTopo = `
-    <div class="linha">
-      <button class="btn ${modoMercado ? 'ok' : ''}" data-act="mercado" data-id="${id}">🛒 Modo mercado</button>
-      <a class="btn pri" style="display:flex;align-items:center" href="#/lista/${id}/adicionar">+ Adicionar item</a>
-    </div>`;
+  const botaoEditar = `<button class="btn" title="Editar nome e limite" data-act="renomear" ${dadosDaLista(lista)}>✏️</button>`;
+  const botaoAdicionar = `<a class="btn pri" style="display:flex;align-items:center" href="#/lista/${id}/adicionar">+ Adicionar item</a>`;
+
+  const acoesDoTopo = modelo
+    ? `<div class="linha no-print">
+         ${botaoEditar}
+         <button class="btn pri" data-act="usarModelo" data-id="${id}">Usar modelo</button>
+         ${botaoAdicionar}
+       </div>`
+    : `<div class="linha no-print">
+         ${botaoEditar}
+         <button class="btn ${modoMercado ? 'ok' : ''}" data-act="mercado" data-id="${id}">🛒 Modo mercado</button>
+         ${botaoAdicionar}
+       </div>`;
 
   app.innerHTML = `
-    <a href="#/" class="mudo" style="font-weight:600">← Minhas listas</a>
+    <a href="#/" class="mudo no-print" style="font-weight:600">← Minhas listas</a>
 
     <div class="topo-pag" style="margin-top:.75rem">
       <div>
         <h1>${escapar(lista.nome)}</h1>
-        <p class="mudo peq">Criada em ${formatarData(lista.criadaEm)} · ${ativa ? 'Ativa' : 'Concluída'}</p>
+        <p class="mudo peq">Criada em ${formatarData(lista.criadaEm)} · ${situacao}</p>
       </div>
       ${ativa ? acoesDoTopo : ''}
     </div>
 
     <div class="detalhe ${modoMercado ? 'mercado' : ''}">
       <section>
+        ${bannerOrcamento(total)}
         ${grupos.length
-          ? grupos.map((g) => grupoDeCategoria(g, id, ativa)).join('')
+          ? grupos.map((g) => grupoDeCategoria(g, id, ativa, modelo)).join('')
           : '<p class="vazio">Lista vazia. Adicione o primeiro item.</p>'}
       </section>
 
       <aside class="lateral">
-        ${painelDeTotais(total)}
-        <div class="tres">
-          ${ativa ? `<button class="btn" data-act="concluir" data-id="${id}">Concluir</button>` : ''}
+        ${painelDeTotais(total, modelo)}
+        <div class="tres no-print">
+          ${ativa && !modelo ? `<button class="btn" data-act="concluir" data-id="${id}">Concluir</button>` : ''}
           <button class="btn" data-act="duplicar" data-id="${id}">Duplicar</button>
-          <button class="btn perigo" data-act="excluir" data-id="${id}" data-nome="${escapar(lista.nome)}">Excluir</button>
+          <button class="btn perigo" data-act="excluir" ${dadosDaLista(lista)}>Excluir</button>
         </div>
+        ${ativa && !modelo ? `<button class="btn no-print" data-act="salvarModelo" data-id="${id}">📌 Salvar como modelo</button>` : ''}
+        ${blocoExportar(id)}
       </aside>
     </div>`;
 }
 
 
-/* ---------- tela: adicionar item ---------- */
-
-// Produtos já usados em qualquer lista, com o último preço como referência
-async function carregarSugestoes(listas) {
-  const gruposPorLista = await Promise.all(listas.map((l) => api(`/listas/${l.id}/itens`)));
-  const sugestoes = {};
-
-  // do mais antigo para o mais novo, assim o preço mais recente prevalece
-  for (const grupos of gruposPorLista.reverse()) {
-    for (const grupo of grupos) {
-      for (const item of grupo.itens) {
-        sugestoes[item.produto.toLowerCase()] = {
-          produto: item.produto,
-          categoria: item.categoria,
-          unidade: item.unidade,
-          preco: item.precoPago ?? item.precoEstimado,
-        };
-      }
-    }
-  }
-  return sugestoes;
+async function buscarUltimoPreco(nome) {
+  const produtos = await api(`/produtos?busca=${encodeURIComponent(nome)}`);
+  const produto = produtos.find((p) => p.nome.toLowerCase() === nome.toLowerCase());
+  return produto?.ultimoPreco ?? null;
 }
 
+function textoDeVariacao(preco, referencia) {
+  if (referencia == null) return 'Primeira compra deste produto.';
+  if (preco == null) return `Última compra: ${moeda(referencia)}`;
+
+  const variacao = ((preco - referencia) / referencia) * 100;
+  if (Math.abs(variacao) < 0.5) return `Igual à última compra (${moeda(referencia)}).`;
+  const sentido = variacao > 0 ? '▲ subiu' : '▼ caiu';
+  return `${sentido} ${Math.abs(variacao).toFixed(0)}% desde a última compra (${moeda(referencia)}).`;
+}
+
+
+/* ---------- tela: adicionar item ---------- */
+
 async function telaAdicionar(id) {
-  const [lista, categorias, listas] = await Promise.all([
+  const [lista, categorias] = await Promise.all([
     api(`/listas/${id}`),
     api('/categorias'),
-    api('/listas'),
   ]);
-  const sugestoes = await carregarSugestoes(listas);
-
-  const opcoesSugestao = Object.values(sugestoes)
-    .map((s) => `<option value="${escapar(s.produto)}">${escapar(s.categoria)}</option>`)
-    .join('');
 
   app.innerHTML = `
     <a href="#/lista/${id}" class="mudo" style="font-weight:600">← ${escapar(lista.nome)}</a>
@@ -320,7 +449,7 @@ async function telaAdicionar(id) {
       <label>Produto
         <input name="produto" list="sug" required autofocus autocomplete="off" placeholder="Ex.: Arroz">
       </label>
-      <datalist id="sug">${opcoesSugestao}</datalist>
+      <datalist id="sug"></datalist>
 
       <label>Categoria
         <select name="categoriaId">${montarOpcoes(categorias.map((c) => [c.id, c.nome]))}</select>
@@ -329,8 +458,17 @@ async function telaAdicionar(id) {
       <div class="tres-c">
         <label>Quantidade<input name="quantidade" type="number" min="0.001" step="any" value="1" required></label>
         <label>Unidade<select name="unidade">${opcoesUnidade('un')}</select></label>
-        <label>Preço estimado (R$)<input name="precoEstimado" type="number" min="0" step="0.01" value="0"></label>
+        <label>Preço estimado (R$)<input name="precoEstimado" type="number" min="0" step="0.01" value="0"><small id="dica-preco" class="mudo peq"></small></label>
       </div>
+
+      <div class="dois-c">
+        <label>Marca (opcional)<input name="marca" maxlength="60" placeholder="Ex.: Tio João"></label>
+        <label>Prioridade<select name="prioridade">${montarOpcoes(PRIORIDADES, 'NORMAL')}</select></label>
+      </div>
+
+      <label>Observação (opcional)
+        <input name="observacao" maxlength="255" placeholder="Ex.: sem glúten, pegar o mais verde">
+      </label>
 
       <div class="linha" style="justify-content:flex-end">
         <button type="button" class="btn" data-act="outro">Salvar e adicionar outro</button>
@@ -338,16 +476,34 @@ async function telaAdicionar(id) {
       </div>
     </form>`;
 
-  // ao escolher um produto conhecido, preenche categoria, unidade e preço
   const form = app.querySelector('form');
-  form.elements.produto.addEventListener('input', () => {
-    const sugestao = sugestoes[form.elements.produto.value.trim().toLowerCase()];
-    if (!sugestao) return;
+  const dicaPreco = document.querySelector('#dica-preco');
+  let temporizador;
 
-    const categoria = categorias.find((c) => c.nome === sugestao.categoria);
-    if (categoria) form.elements.categoriaId.value = categoria.id;
-    form.elements.unidade.value = sugestao.unidade;
-    form.elements.precoEstimado.value = sugestao.preco ?? 0;
+  form.elements.produto.addEventListener('input', () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(async () => {
+      const texto = form.elements.produto.value.trim();
+      try {
+        const produtos = texto ? await api(`/produtos?busca=${encodeURIComponent(texto)}`) : [];
+        document.querySelector('#sug').innerHTML = produtos
+          .map((p) => `<option value="${escapar(p.nome)}">${escapar(p.categoria)}</option>`)
+          .join('');
+
+        const escolhido = produtos.find((p) => p.nome.toLowerCase() === texto.toLowerCase());
+        dicaPreco.textContent = '';
+        if (!escolhido) return;
+
+        form.elements.categoriaId.value = escolhido.categoriaId;
+        form.elements.unidade.value = escolhido.unidade;
+        if (escolhido.ultimoPreco != null) {
+          form.elements.precoEstimado.value = escolhido.ultimoPreco;
+          dicaPreco.textContent = `Última compra: ${moeda(escolhido.ultimoPreco)}`;
+        }
+      } catch (erro) {
+        return;
+      }
+    }, 200);
   });
 }
 
@@ -363,6 +519,9 @@ async function salvarItem(form, adicionarOutro) {
     quantidade: paraNumero(dados.quantidade),
     unidade: dados.unidade,
     precoEstimado: paraNumero(dados.precoEstimado),
+    marca: dados.marca.trim(),
+    observacao: dados.observacao.trim(),
+    prioridade: dados.prioridade,
   });
 
   if (adicionarOutro) {
@@ -545,11 +704,50 @@ const acoes = {
   },
 
   renomear(dados) {
-    abrirDialogo('Renomear lista', [{ nome: 'nome', rotulo: 'Novo nome', valor: dados.nome, obrigatorio: true }],
-      async (valores) => {
-        await api(`/listas/${dados.id}`, 'PUT', { nome: valores.nome });
-        atualizar();
-      });
+    const campos = [
+      { nome: 'nome', rotulo: 'Nome', valor: dados.nome, obrigatorio: true },
+      { nome: 'limite', rotulo: 'Limite de gasto (R$, opcional)', tipo: 'number', valor: dados.limite },
+    ];
+    abrirDialogo('Editar lista', campos, async (valores) => {
+      // limite vazio = lista sem orçamento
+      await api(`/listas/${dados.id}`, 'PUT', { nome: valores.nome, limite: paraNumero(valores.limite) });
+      atualizar();
+    });
+  },
+
+  async salvarModelo(dados) {
+    const modelo = await api(`/listas/${dados.id}/salvar-modelo`, 'POST');
+    mostrarAviso(`Modelo "${modelo.nome}" criado. Ele aparece na tela de listas.`, true);
+    if (estaNaHome()) atualizar();
+  },
+
+  async usarModelo(dados) {
+    const nova = await api(`/listas/${dados.id}/usar-modelo`, 'POST');
+    location.hash = `#/lista/${nova.id}`;
+  },
+
+  imprimir() {
+    window.print(); // no diálogo de impressão, escolha "Salvar como PDF"
+  },
+
+  async whatsapp(dados) {
+    const texto = await apiTexto(`/listas/${dados.id}/exportar/texto`);
+    const janela = window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+    if (janela) {
+      janela.opener = null;
+    } else {
+      mostrarAviso('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups ou use "Copiar texto".');
+    }
+  },
+
+  async copiarTexto(dados) {
+    const texto = await apiTexto(`/listas/${dados.id}/exportar/texto`);
+    if (!navigator.clipboard?.writeText) {
+      mostrarAviso('Este navegador não permite copiar automaticamente. Use o botão do WhatsApp ou o CSV.');
+      return;
+    }
+    await navigator.clipboard.writeText(texto);
+    mostrarAviso('Texto da lista copiado!', true);
   },
 
   async concluir(dados) {
@@ -580,12 +778,20 @@ const acoes = {
       return;
     }
 
+    const referencia = await buscarUltimoPreco(dados.produto);
+
     abrirDialogo('Preço pago por unidade (R$)',
-      [{ nome: 'preco', rotulo: 'Preço', tipo: 'number', valor: dados.estimado, obrigatorio: true }],
+      [{ nome: 'preco', rotulo: 'Preço', tipo: 'number', valor: dados.estimado, obrigatorio: true, comDica: true }],
       async (valores) => {
         await api(urlComprado, 'PATCH', { comprado: true, precoPago: paraNumero(valores.preco) });
         atualizar();
       });
+
+    const campoPreco = document.querySelector('#dlg input[name="preco"]');
+    const dica = document.querySelector('#dlg .dica');
+    const mostrarVariacao = () => { dica.textContent = textoDeVariacao(paraNumero(campoPreco.value), referencia); };
+    campoPreco.addEventListener('input', mostrarVariacao);
+    mostrarVariacao();
   },
 
   editar(dados) {
@@ -593,12 +799,18 @@ const acoes = {
       { nome: 'q', rotulo: 'Quantidade', tipo: 'number', valor: dados.q, obrigatorio: true },
       { nome: 'u', rotulo: 'Unidade', select: opcoesUnidade(dados.u) },
       { nome: 'p', rotulo: 'Preço estimado (R$)', tipo: 'number', valor: dados.p },
+      { nome: 'm', rotulo: 'Marca', valor: dados.m },
+      { nome: 'pr', rotulo: 'Prioridade', select: montarOpcoes(PRIORIDADES, dados.pr) },
+      { nome: 'o', rotulo: 'Observação', valor: dados.o },
     ];
     abrirDialogo('Editar item', campos, async (valores) => {
       await api(`/listas/${dados.id}/itens/${dados.item}`, 'PATCH', {
         quantidade: paraNumero(valores.q),
         unidade: valores.u,
         precoEstimado: paraNumero(valores.p),
+        marca: valores.m.trim(),         // texto vazio apaga a marca
+        observacao: valores.o.trim(),    // texto vazio apaga a observação
+        prioridade: valores.pr,
       });
       atualizar();
     });
@@ -635,7 +847,10 @@ document.addEventListener('submit', (evento) => {
 
   comTratamento(async () => {
     if (form.dataset.form === 'criar') {
-      const nova = await api('/listas', 'POST', { nome: form.elements.nome.value.trim() });
+      const nova = await api('/listas', 'POST', {
+        nome: form.elements.nome.value.trim(),
+        limite: paraNumero(form.elements.limite.value),
+      });
       location.hash = `#/lista/${nova.id}`;
     } else {
       await salvarItem(form, false);

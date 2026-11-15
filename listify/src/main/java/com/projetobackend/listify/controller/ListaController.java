@@ -59,6 +59,20 @@ public class ListaController {
         return service.duplicar(id);
     }
 
+    /** Guarda a lista como modelo reutilizável (ex.: "Compra do mês"). */
+    @PostMapping("/{id}/salvar-modelo")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ListaResponse salvarComoModelo(@PathVariable Long id) {
+        return service.salvarComoModelo(id);
+    }
+
+    /** Cria uma lista nova e ativa a partir de um modelo. */
+    @PostMapping("/{id}/usar-modelo")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ListaResponse usarModelo(@PathVariable Long id) {
+        return service.usarModelo(id);
+    }
+
     @PostMapping("/{id}/concluir")
     public ListaResponse concluir(@PathVariable Long id) {
         return service.concluir(id);

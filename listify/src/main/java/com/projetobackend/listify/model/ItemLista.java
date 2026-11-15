@@ -2,10 +2,15 @@ package com.projetobackend.listify.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "itens_lista")
 public class ItemLista {
+
+    public static final String NORMAL = "NORMAL";
+    public static final String IMPORTANTE = "IMPORTANTE";
+    public static final String ESSENCIAL = "ESSENCIAL";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,6 +40,18 @@ public class ItemLista {
     @Column(nullable = false)
     private boolean comprado = false;
 
+    @Column(length = 60)
+    private String marca;
+
+    @Column(length = 255)
+    private String observacao;
+
+    @Column(nullable = false, length = 10)
+    private String prioridade = NORMAL;
+
+    @Column(name = "comprado_em")
+    private LocalDateTime compradoEm;
+
     public Long getId() { return id; }
     public Lista getLista() { return lista; }
     public void setLista(Lista lista) { this.lista = lista; }
@@ -50,4 +67,11 @@ public class ItemLista {
     public void setPrecoPago(BigDecimal precoPago) { this.precoPago = precoPago; }
     public boolean isComprado() { return comprado; }
     public void setComprado(boolean comprado) { this.comprado = comprado; }
+    public String getMarca() { return marca; }
+    public void setMarca(String marca) { this.marca = marca; }
+    public String getObservacao() { return observacao; }
+    public void setObservacao(String observacao) { this.observacao = observacao; }
+    public String getPrioridade() { return prioridade; }
+    public void setPrioridade(String prioridade) { this.prioridade = prioridade; }
+    public void setCompradoEm(LocalDateTime compradoEm) { this.compradoEm = compradoEm; }
 }

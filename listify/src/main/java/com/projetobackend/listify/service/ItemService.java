@@ -1,6 +1,7 @@
 package com.projetobackend.listify.service;
 
 import com.projetobackend.listify.dto.ItemDtos.*;
+import com.projetobackend.listify.exception.ConflitoException;
 import com.projetobackend.listify.exception.RecursoNaoEncontradoException;
 import com.projetobackend.listify.model.*;
 import com.projetobackend.listify.repository.*;
@@ -9,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -40,7 +42,12 @@ public class ItemService {
         item.setProduto(produto);
         item.setQuantidade(req.quantidade());
         item.setUnidade(req.unidade());
-        item.setPrecoEstimado(req.precoEstimado());
+        item.setPrecoEstimado(req.precoEstimado() != null
+                ? req.precoEstimado()
+                : produtoRepo.findUltimoPreco(produto.getId()).orElse(null));
+        item.setMarca(limpar(req.marca()));
+        item.setObservacao(limpar(req.observacao()));
+        item.setPrioridade(req.prioridade() == null ? ItemLista.NORMAL : req.prioridade());
         return ItemResponse.de(itemRepo.save(item));
     }
 
@@ -62,6 +69,10 @@ public class ItemService {
         if (req.unidade() != null) item.setUnidade(req.unidade());
         if (req.precoEstimado() != null) item.setPrecoEstimado(req.precoEstimado());
         if (req.precoPago() != null) item.setPrecoPago(req.precoPago());
+        // texto vazio apaga marca/observação; null (campo não enviado) mantém o que já estava
+        if (req.marca() != null) item.setMarca(limpar(req.marca()));
+        if (req.observacao() != null) item.setObservacao(limpar(req.observacao()));
+        if (req.prioridade() != null) item.setPrioridade(req.prioridade());
         return ItemResponse.de(item);
     }
 
@@ -74,11 +85,16 @@ public class ItemService {
     @Transactional
     public ItemResponse marcarComprado(Long listaId, Long itemId, CompradoRequest req) {
         ItemLista item = buscarItem(listaId, itemId);
+        if (item.getLista().isModelo()) {
+            throw new ConflitoException("Itens de um modelo não podem ser marcados como comprados.");
+        }
         item.setComprado(req.comprado());
         if (req.comprado()) {
             item.setPrecoPago(req.precoPago() != null ? req.precoPago() : item.getPrecoEstimado());
+            item.setCompradoEm(LocalDateTime.now());
         } else {
             item.setPrecoPago(null);
+            item.setCompradoEm(null);
         }
         return ItemResponse.de(item);
     }
@@ -86,7 +102,7 @@ public class ItemService {
     /** Estimado = soma(quantidade × preço estimado). Gasto = soma(quantidade × preço pago) dos comprados. */
     @Transactional(readOnly = true)
     public TotalResponse total(Long listaId) {
-        buscarLista(listaId);
+        Lista lista = buscarLista(listaId);
         List<ItemLista> itens = itemRepo.findByListaIdOrderByProdutoNomeAsc(listaId);
 
         BigDecimal estimado = itens.stream()
@@ -98,8 +114,11 @@ public class ItemService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         long comprados = itens.stream().filter(ItemLista::isComprado).count();
 
-        return new TotalResponse(estimado.setScale(2, RoundingMode.HALF_UP),
-                gasto.setScale(2, RoundingMode.HALF_UP), comprados, itens.size());
+        estimado = estimado.setScale(2, RoundingMode.HALF_UP);
+        gasto = gasto.setScale(2, RoundingMode.HALF_UP);
+
+        return new TotalResponse(estimado, gasto, comprados, itens.size(),
+                lista.getLimite(), TotalResponse.situacao(lista.getLimite(), estimado, gasto));
     }
 
     @Transactional(readOnly = true)
@@ -131,6 +150,13 @@ public class ItemService {
     private ItemLista buscarItem(Long listaId, Long itemId) {
         return itemRepo.findByIdAndListaId(itemId, listaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Item não encontrado: " + itemId));
+    }
+
+    /** Remove espaços das pontas; texto vazio vira null (sem valor). */
+    private String limpar(String texto) {
+        if (texto == null) return null;
+        String limpo = texto.trim();
+        return limpo.isEmpty() ? null : limpo;
     }
 
     private BigDecimal subtotal(BigDecimal quantidade, BigDecimal precoUnitario) {
