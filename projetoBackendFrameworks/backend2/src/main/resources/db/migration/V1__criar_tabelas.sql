@@ -1,0 +1,24 @@
+CREATE TABLE listas (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(120) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ABERTA',
+    criada_em DATETIME(6) NOT NULL,
+    concluida_em DATETIME(6) NULL
+);
+
+CREATE TABLE itens (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    lista_id BIGINT NOT NULL,
+    nome VARCHAR(160) NOT NULL,
+    quantidade VARCHAR(60) NULL,
+    comprado BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT fk_itens_lista FOREIGN KEY (lista_id) REFERENCES listas(id) ON DELETE CASCADE
+);
+
+CREATE TABLE historico_listas (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    lista_id BIGINT NOT NULL,
+    nome_lista VARCHAR(120) NOT NULL,
+    concluida_em DATETIME(6) NOT NULL,
+    CONSTRAINT fk_historico_lista FOREIGN KEY (lista_id) REFERENCES listas(id) ON DELETE CASCADE
+);
