@@ -2,7 +2,6 @@ const app = document.querySelector('#app');
 
 const UNIDADES = { un: 'un', kg: 'kg', g: 'g', L: 'L', pacote: 'pct' };
 
-let abaAtual = 'ativas';
 let modoMercado = false;
 let timerAviso;
 
@@ -137,19 +136,17 @@ function botoesDaLista(lista) {
 
   return `
     <div class="acoes">
-      ${lista.status === 'ATIVA' ? renomearEConcluir : ''}
+      ${renomearEConcluir}
       <button class="btn" title="Duplicar" data-act="duplicar" data-id="${lista.id}">📋</button>
       <button class="btn perigo" title="Excluir" data-act="excluir" data-id="${lista.id}" data-nome="${escapar(lista.nome)}">🗑️</button>
     </div>`;
 }
 
 function cartaoDaLista({ lista, total }) {
-  const selo = lista.status !== 'ATIVA' ? '<span class="selo">Concluída</span>' : '';
-
   return `
     <div class="card">
       <a href="#/lista/${lista.id}">
-        <div class="linha" style="justify-content:space-between"><h3>${escapar(lista.nome)}</h3>${selo}</div>
+        <h3>${escapar(lista.nome)}</h3>
         <p class="mudo peq">Criada em ${formatarData(lista.criadaEm)} · ${total.totalItens} itens</p>
         <div class="barra"><i style="width:${percentual(total)}%"></i></div>
         <div class="val">
@@ -162,17 +159,10 @@ function cartaoDaLista({ lista, total }) {
 }
 
 async function telaHome() {
-  const listas = await api('/listas');
+  // as listas concluídas ficam na página de histórico
+  const listas = (await api('/listas')).filter((lista) => lista.status === 'ATIVA');
   const totais = await Promise.all(listas.map((l) => api(`/listas/${l.id}/total`)));
-
-  const todas = listas.map((lista, i) => ({ lista, total: totais[i] }));
-  const ativas = todas.filter((x) => x.lista.status === 'ATIVA');
-  const historico = todas.filter((x) => x.lista.status !== 'ATIVA');
-  const visiveis = abaAtual === 'ativas' ? ativas : historico;
-
-  const mensagemVazia = abaAtual === 'ativas'
-    ? 'Nenhuma lista ativa. Crie uma acima!'
-    : 'Nenhuma lista concluída ainda.';
+  const ativas = listas.map((lista, i) => ({ lista, total: totais[i] }));
 
   app.innerHTML = `
     <div class="topo-pag">
@@ -186,14 +176,13 @@ async function telaHome() {
       </form>
     </div>
 
-    <div class="abas">
-      <button data-act="aba" data-aba="ativas" class="${abaAtual === 'ativas' ? 'on' : ''}">Ativas (${ativas.length})</button>
-      <button data-act="aba" data-aba="historico" class="${abaAtual === 'historico' ? 'on' : ''}">Histórico (${historico.length})</button>
-    </div>
+    ${ativas.length
+      ? `<div class="grade">${ativas.map(cartaoDaLista).join('')}</div>`
+      : '<p class="vazio">Nenhuma lista ativa. Crie uma acima!</p>'}
 
-    ${visiveis.length
-      ? `<div class="grade">${visiveis.map(cartaoDaLista).join('')}</div>`
-      : `<p class="vazio">${mensagemVazia}</p>`}`;
+    <p class="mudo peq" style="margin-top:1.5rem">
+      As listas concluídas ficam no <a href="#/historico" style="text-decoration:underline">histórico de compras</a>.
+    </p>`;
 }
 
 
@@ -386,17 +375,172 @@ async function salvarItem(form, adicionarOutro) {
 }
 
 
+/* ---------- tela: histórico de compras ---------- */
+
+const PERIODOS = [
+  ['todos', 'Todo o período'],
+  ['30dias', 'Últimos 30 dias'],
+  ['mes', 'Este mês'],
+  ['ano', 'Este ano'],
+];
+
+// compras vindas da API e filtros escolhidos na tela
+let comprasConcluidas = [];
+const filtrosHistorico = { busca: '', periodo: 'todos' };
+
+function filtrarCompras(compras) {
+  const busca = filtrosHistorico.busca.trim().toLowerCase();
+  const agora = new Date();
+  const trintaDias = 30 * 24 * 60 * 60 * 1000;
+
+  return compras.filter((compra) => {
+    if (busca && !compra.nomeLista.toLowerCase().includes(busca)) return false;
+
+    const data = new Date(compra.concluidaEm);
+    switch (filtrosHistorico.periodo) {
+      case '30dias': return agora - data <= trintaDias;
+      case 'mes': return data.getFullYear() === agora.getFullYear() && data.getMonth() === agora.getMonth();
+      case 'ano': return data.getFullYear() === agora.getFullYear();
+      default: return true;
+    }
+  });
+}
+
+// quanto se economizou (ou passou) nos itens que de fato foram comprados
+function economiaDaCompra(compra) {
+  return Number(compra.totalEstimadoComprados) - Number(compra.totalGasto);
+}
+
+function agruparPorMes(compras) {
+  const grupos = new Map();
+  for (const compra of compras) {
+    const chave = compra.concluidaEm.slice(0, 7); // "2026-11"
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(compra);
+  }
+  return [...grupos.entries()]; // a API já manda da mais recente para a mais antiga
+}
+
+function nomeDoMes(chave) {
+  const [ano, mes] = chave.split('-').map(Number);
+  const texto = new Date(ano, mes - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function cartaoDeResumo(rotulo, valor, classe = '') {
+  return `
+    <div class="card">
+      <div class="rotulo">${rotulo}</div>
+      <div class="numero ${classe}">${valor}</div>
+    </div>`;
+}
+
+function resumoDoHistorico(compras) {
+  const totalGasto = compras.reduce((soma, c) => soma + Number(c.totalGasto), 0);
+  const economia = compras.reduce((soma, c) => soma + economiaDaCompra(c), 0);
+  const media = totalGasto / compras.length;
+
+  return `
+    <div class="resumo">
+      ${cartaoDeResumo('Compras concluídas', compras.length)}
+      ${cartaoDeResumo('Total gasto', moeda(totalGasto))}
+      ${cartaoDeResumo('Média por compra', moeda(media))}
+      ${cartaoDeResumo(economia >= 0 ? 'Economizado' : 'Acima do estimado', moeda(Math.abs(economia)), economia >= 0 ? 'bom' : 'ruim')}
+    </div>`;
+}
+
+function selo(compra) {
+  const diferenca = economiaDaCompra(compra);
+  if (compra.itensComprados === 0) return '<span class="dif neutro">Nenhum item comprado</span>';
+  if (diferenca > 0.005) return `<span class="dif bom">Economizou ${moeda(diferenca)}</span>`;
+  if (diferenca < -0.005) return `<span class="dif ruim">${moeda(-diferenca)} acima</span>`;
+  return '<span class="dif neutro">No valor estimado</span>';
+}
+
+function cartaoDaCompra(compra) {
+  const progresso = compra.totalItens ? (compra.itensComprados / compra.totalItens) * 100 : 0;
+
+  return `
+    <div class="card">
+      <a href="#/lista/${compra.listaId}">
+        <div class="linha" style="justify-content:space-between"><h3>${escapar(compra.nomeLista)}</h3>${selo(compra)}</div>
+        <p class="mudo peq">Concluída em ${formatarData(compra.concluidaEm)} · ${compra.itensComprados} de ${compra.totalItens} itens comprados</p>
+        <div class="barra"><i style="width:${progresso}%"></i></div>
+        <div class="val">
+          <span>Estimado <b>${moeda(compra.totalEstimado)}</b></span>
+          <span>Gasto <b style="color:var(--pri)">${moeda(compra.totalGasto)}</b></span>
+        </div>
+      </a>
+      <div class="acoes">
+        <a class="btn" href="#/lista/${compra.listaId}">Ver lista</a>
+        <button class="btn pri" data-act="duplicar" data-id="${compra.listaId}" title="Cria uma lista nova igual a esta">Comprar de novo</button>
+      </div>
+    </div>`;
+}
+
+function blocoDoMes([chave, compras]) {
+  const gastoDoMes = compras.reduce((soma, c) => soma + Number(c.totalGasto), 0);
+  const quantidade = compras.length === 1 ? '1 compra' : `${compras.length} compras`;
+
+  return `
+    <div class="mes">
+      <h2>${nomeDoMes(chave)}</h2>
+      <span class="mudo peq">${quantidade} · gasto <b>${moeda(gastoDoMes)}</b></span>
+    </div>
+    <div class="grade">${compras.map(cartaoDaCompra).join('')}</div>`;
+}
+
+// Redesenha só a área de resultados, para o campo de busca não perder o foco
+function desenharHistorico() {
+  const area = document.querySelector('#resultado-historico');
+  if (!area) return;
+
+  if (comprasConcluidas.length === 0) {
+    area.innerHTML = `
+      <p class="vazio">Nenhuma compra concluída ainda. Quando você concluir uma lista, ela aparece aqui.<br><br>
+        <a class="btn pri" href="#/">Ir para minhas listas</a></p>`;
+    return;
+  }
+
+  const compras = filtrarCompras(comprasConcluidas);
+  if (compras.length === 0) {
+    area.innerHTML = '<p class="vazio">Nenhuma compra encontrada com esses filtros.</p>';
+    return;
+  }
+
+  area.innerHTML = resumoDoHistorico(compras) + agruparPorMes(compras).map(blocoDoMes).join('');
+}
+
+async function telaHistorico() {
+  comprasConcluidas = await api('/listas/historico');
+  filtrosHistorico.busca = '';
+  filtrosHistorico.periodo = 'todos';
+
+  app.innerHTML = `
+    <div class="topo-pag">
+      <div>
+        <h1>Histórico de compras</h1>
+        <p class="mudo">Todas as compras que você já concluiu, mês a mês.</p>
+      </div>
+    </div>
+
+    <div class="filtros">
+      <input type="search" data-filtro="busca" placeholder="Buscar pelo nome da lista" aria-label="Buscar compra">
+      <select data-filtro="periodo" aria-label="Período">${montarOpcoes(PERIODOS, 'todos')}</select>
+    </div>
+
+    <div id="resultado-historico"></div>`;
+
+  desenharHistorico();
+}
+
+
 /* ---------- ações dos botões ---------- */
 
 const atualizar = () => rotear();
 const estaNaHome = () => location.hash === '' || location.hash === '#/';
 
 const acoes = {
-  aba(dados) {
-    abaAtual = dados.aba;
-    atualizar();
-  },
-
   mercado() {
     modoMercado = !modoMercado;
     atualizar();
@@ -479,6 +623,13 @@ document.addEventListener('click', (evento) => {
   comTratamento(() => acoes[botao.dataset.act](botao.dataset, botao));
 });
 
+document.addEventListener('input', (evento) => {
+  const campo = evento.target.closest('[data-filtro]');
+  if (!campo) return;
+  filtrosHistorico[campo.dataset.filtro] = campo.value;
+  desenharHistorico();
+});
+
 document.addEventListener('submit', (evento) => {
   const form = evento.target;
   if (!form.dataset.form) return; // formulários dos diálogos não passam por aqui
@@ -497,12 +648,21 @@ document.addEventListener('submit', (evento) => {
 
 /* ---------- rotas (pelo hash da URL) ---------- */
 
+function marcarMenu(atual) {
+  document.querySelectorAll('.menu a').forEach((link) => {
+    link.classList.toggle('on', link.dataset.nav === atual);
+  });
+}
+
 async function rotear() {
   const [, pagina, idTexto, subpagina] = location.hash.split('/');
   const id = Number(idTexto);
 
+  marcarMenu(pagina === 'historico' ? 'historico' : 'home');
+
   await comTratamento(async () => {
-    if (pagina === 'lista' && id && subpagina === 'adicionar') await telaAdicionar(id);
+    if (pagina === 'historico') await telaHistorico();
+    else if (pagina === 'lista' && id && subpagina === 'adicionar') await telaAdicionar(id);
     else if (pagina === 'lista' && id) await telaDetalhe(id);
     else await telaHome();
   });

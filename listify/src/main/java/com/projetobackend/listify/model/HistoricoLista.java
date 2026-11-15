@@ -32,6 +32,7 @@ public class HistoricoLista {
     }
 
     public Long getId() { return id; }
+    public Lista getLista() { return lista; }
     public Long getListaId() { return lista.getId(); }
     public String getNomeLista() { return nomeLista; }
     public LocalDateTime getConcluidaEm() { return concluidaEm; }

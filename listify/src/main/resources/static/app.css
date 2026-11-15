@@ -1,3 +1,5 @@
+/* ===== Variáveis e base ===== */
+
 :root {
   --bg: oklch(.975 .012 75);
   --fg: oklch(.24 .04 25);
@@ -10,6 +12,8 @@
   --ok-bg: oklch(.9 .05 140);
   --ok-fg: oklch(.3 .07 145);
   --erro: oklch(.55 .2 27);
+  --erro-bg: oklch(.92 .05 27);
+  --erro-fg: oklch(.4 .15 27);
   --borda: oklch(.89 .02 70);
   --r: .75rem;
 }
@@ -33,10 +37,17 @@ h3 {
   margin: 0;
 }
 
+h1 {
+  font-size: 2rem;
+}
+
 a {
   color: inherit;
   text-decoration: none;
 }
+
+
+/* ===== Utilitários ===== */
 
 .cont {
   max-width: 72rem;
@@ -48,6 +59,24 @@ main.cont {
   padding-top: 1.5rem;
   padding-bottom: 3rem;
 }
+
+.mudo {
+  color: var(--mudo-fg);
+}
+
+.peq {
+  font-size: .8rem;
+}
+
+.linha {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+
+/* ===== Cabeçalho e menu ===== */
 
 .topo {
   background: var(--pri);
@@ -66,19 +95,37 @@ main.cont {
   font: 700 1.25rem Fraunces,serif;
 }
 
+.menu {
+  display: flex;
+  gap: .25rem;
+  margin-left: 1rem;
+}
+
+.menu a {
+  padding: .35rem .8rem;
+  border-radius: .5rem;
+  font-size: .875rem;
+  font-weight: 600;
+  opacity: .85;
+}
+
+.menu a:hover {
+  opacity: 1;
+}
+
+.menu a.on {
+  background: #fff2;
+  opacity: 1;
+}
+
 .sub {
   margin-left: auto;
   opacity: .8;
   font-size: .875rem;
 }
 
-.mudo {
-  color: var(--mudo-fg);
-}
 
-.peq {
-  font-size: .8rem;
-}
+/* ===== Botões ===== */
 
 .btn {
   height: 2.5rem;
@@ -89,6 +136,11 @@ main.cont {
   border-radius: .6rem;
   font: 600 .875rem inherit;
   cursor: pointer;
+}
+
+a.btn {
+  display: inline-flex;
+  align-items: center;
 }
 
 .btn.pri {
@@ -111,6 +163,9 @@ main.cont {
   opacity: .88;
 }
 
+
+/* ===== Campos de formulário ===== */
+
 input,
 select {
   height: 2.75rem;
@@ -130,12 +185,31 @@ select:focus,
   outline-offset: 1px;
 }
 
-.linha {
-  display: flex;
-  gap: .5rem;
-  flex-wrap: wrap;
-  align-items: center;
+form.add {
+  max-width: 42rem;
+  display: grid;
+  gap: 1.1rem;
 }
+
+form.add label {
+  font-weight: 600;
+  font-size: .875rem;
+  display: block;
+}
+
+form.add label input,
+form.add label select {
+  margin-top: .25rem;
+}
+
+.tres-c {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+
+/* ===== Estrutura das páginas ===== */
 
 .topo-pag {
   display: flex;
@@ -144,39 +218,22 @@ select:focus,
   margin-bottom: 1.5rem;
 }
 
-h1 {
-  font-size: 2rem;
-}
-
-.abas {
-  display: inline-flex;
-  background: var(--mudo);
-  padding: .25rem;
-  border-radius: .6rem;
-  margin-bottom: 1.5rem;
-}
-
-.abas button {
-  border: 0;
-  background: none;
-  padding: .5rem 1rem;
-  border-radius: .45rem;
-  font: 600 .875rem inherit;
-  color: var(--mudo-fg);
-  cursor: pointer;
-}
-
-.abas .on {
-  background: var(--card);
-  color: var(--pri);
-  box-shadow: 0 1px 2px #0002;
-}
-
 .grade {
   display: grid;
   gap: 1rem;
   grid-template-columns: 1fr;
 }
+
+.vazio {
+  border: 1px dashed var(--borda);
+  border-radius: var(--r);
+  padding: 2.5rem;
+  text-align: center;
+  color: var(--mudo-fg);
+}
+
+
+/* ===== Cartões das listas ===== */
 
 .card {
   background: var(--card);
@@ -187,15 +244,6 @@ h1 {
 
 .card h3 {
   font-size: 1.1rem;
-}
-
-.selo {
-  background: var(--ok-bg);
-  color: var(--ok-fg);
-  font-size: .75rem;
-  font-weight: 700;
-  padding: .1rem .6rem;
-  border-radius: 99px;
 }
 
 .barra {
@@ -237,13 +285,8 @@ h1 {
   padding: 0 .6rem;
 }
 
-.vazio {
-  border: 1px dashed var(--borda);
-  border-radius: var(--r);
-  padding: 2.5rem;
-  text-align: center;
-  color: var(--mudo-fg);
-}
+
+/* ===== Detalhe da lista ===== */
 
 .detalhe {
   display: grid;
@@ -290,6 +333,15 @@ h1 {
   color: var(--mudo-fg);
 }
 
+.item .info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nome {
+  font-weight: 600;
+}
+
 .chk {
   flex: none;
   width: 1.6rem;
@@ -307,15 +359,7 @@ h1 {
   border-color: var(--ok);
 }
 
-.item .info {
-  flex: 1;
-  min-width: 0;
-}
-
-.nome {
-  font-weight: 600;
-}
-
+/* modo mercado: itens maiores e sem os botões de edição */
 .mercado .item {
   padding: 1.25rem;
 }
@@ -332,6 +376,18 @@ h1 {
 
 .mercado .edita {
   display: none;
+}
+
+.lateral {
+  display: grid;
+  gap: .75rem;
+  align-content: start;
+}
+
+.lateral .tres {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: .5rem;
 }
 
 .tot {
@@ -355,40 +411,84 @@ h1 {
   background: var(--pri-fg);
 }
 
-.lateral {
+
+/* ===== Histórico de compras ===== */
+
+.filtros {
   display: grid;
   gap: .75rem;
-  align-content: start;
-}
-
-.lateral .tres {
-  display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: .5rem;
-}
-
-form.add {
-  max-width: 42rem;
-  display: grid;
-  gap: 1.1rem;
-}
-
-form.add label {
-  font-weight: 600;
-  font-size: .875rem;
-  display: block;
-}
-
-form.add label input,
-form.add label select {
-  margin-top: .25rem;
-}
-
-.tres-c {
-  display: grid;
-  gap: 1rem;
   grid-template-columns: 1fr;
+  margin-bottom: 1.5rem;
 }
+
+.resumo {
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: repeat(2,1fr);
+  margin-bottom: .5rem;
+}
+
+.resumo .card {
+  padding: 1rem;
+}
+
+.resumo .rotulo {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--mudo-fg);
+}
+
+.resumo .numero {
+  margin-top: .25rem;
+  font: 700 1.4rem Fraunces,serif;
+}
+
+.resumo .numero.bom {
+  color: var(--ok);
+}
+
+.resumo .numero.ruim {
+  color: var(--erro);
+}
+
+.mes {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin: 1.75rem 0 .75rem;
+}
+
+.mes h2 {
+  font-size: 1.15rem;
+}
+
+.dif {
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .1rem .6rem;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.dif.bom {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+
+.dif.ruim {
+  background: var(--erro-bg);
+  color: var(--erro-fg);
+}
+
+.dif.neutro {
+  background: var(--mudo);
+  color: var(--mudo-fg);
+}
+
+
+/* ===== Diálogo e aviso ===== */
 
 dialog {
   border: 0;
@@ -426,6 +526,15 @@ dialog label {
   z-index: 9;
 }
 
+
+/* ===== Responsivo (celular primeiro) ===== */
+
+@media(max-width:639px) {
+  .topo .sub {
+    display: none;
+  }
+}
+
 @media(min-width:640px) {
   .grade {
     grid-template-columns: repeat(2,1fr);
@@ -439,6 +548,14 @@ dialog label {
     flex-direction: row;
     align-items: flex-end;
     justify-content: space-between;
+  }
+
+  .filtros {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .resumo {
+    grid-template-columns: repeat(4,1fr);
   }
 }
 

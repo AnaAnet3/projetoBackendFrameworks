@@ -1,6 +1,7 @@
 package com.projetobackend.listify.service;
 
 import com.projetobackend.listify.dto.ListaRequest;
+import com.projetobackend.listify.dto.HistoricoResponse;
 import com.projetobackend.listify.dto.ListaResponse;
 import com.projetobackend.listify.exception.ConflitoException;
 import com.projetobackend.listify.exception.RecursoNaoEncontradoException;
@@ -15,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Regras de negócio das listas (adaptado da backend2 para o modelo com produtos e preços). */
 @Service
@@ -99,9 +102,22 @@ public class ListaService {
         return ListaResponse.de(lista);
     }
 
+    /** Compras concluídas (da mais recente para a mais antiga), com os totais de cada uma. */
     @Transactional(readOnly = true)
-    public List<HistoricoLista> historico() {
-        return historico.findAllByOrderByConcluidaEmDesc();
+    public List<HistoricoResponse> historico() {
+        List<HistoricoLista> registros = historico.findAllComLista();
+        if (registros.isEmpty()) {
+            return List.of();
+        }
+
+        // uma única consulta para os itens de todas as listas do histórico
+        List<Long> listaIds = registros.stream().map(HistoricoLista::getListaId).toList();
+        Map<Long, List<ItemLista>> itensPorLista = itens.findByListaIdIn(listaIds).stream()
+                .collect(Collectors.groupingBy(item -> item.getLista().getId()));
+
+        return registros.stream()
+                .map(h -> HistoricoResponse.de(h, itensPorLista.getOrDefault(h.getListaId(), List.of())))
+                .toList();
     }
 
     private Lista obterLista(Long id) {
