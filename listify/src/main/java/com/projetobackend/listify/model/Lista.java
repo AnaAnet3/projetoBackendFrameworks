@@ -2,14 +2,14 @@ package com.projetobackend.listify.model;
 
 import jakarta.persistence.*;
 
-/**
- * TEMPORÁRIA: só para você rodar e testar hoje.
- * Quando a pessoa 2 (Backend A) subir a Lista de verdade, apague este arquivo
- * e o ListaRepository temporário.
- */
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "listas")
 public class Lista {
+
+    public static final String ATIVA = "ATIVA";
+    public static final String CONCLUIDA = "CONCLUIDA";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -18,7 +18,26 @@ public class Lista {
     @Column(nullable = false)
     private String nome;
 
+    @Column(nullable = false, length = 15)
+    private String status = ATIVA;
+
+    @Column(name = "criada_em", nullable = false)
+    private LocalDateTime criadaEm;
+
+    @Column(name = "concluida_em")
+    private LocalDateTime concluidaEm;
+
+    @PrePersist
+    void aoCriar() {
+        if (criadaEm == null) criadaEm = LocalDateTime.now();
+    }
+
     public Long getId() { return id; }
     public String getNome() { return nome; }
     public void setNome(String nome) { this.nome = nome; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public LocalDateTime getCriadaEm() { return criadaEm; }
+    public LocalDateTime getConcluidaEm() { return concluidaEm; }
+    public void setConcluidaEm(LocalDateTime concluidaEm) { this.concluidaEm = concluidaEm; }
 }

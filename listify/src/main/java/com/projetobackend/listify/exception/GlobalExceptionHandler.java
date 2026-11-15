@@ -17,6 +17,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("erro", e.getMessage()));
     }
 
+    // NOVO: lista concluída não pode ser alterada (regra da backend2)
+    @ExceptionHandler(ConflitoException.class)
+    public ResponseEntity<Map<String, Object>> conflito(ConflitoException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("erro", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> requisicaoInvalida(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(Map.of("erro", e.getMessage()));
