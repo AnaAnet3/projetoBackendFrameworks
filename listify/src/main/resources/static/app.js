@@ -6,7 +6,6 @@ const PRIORIDADES = [['NORMAL', 'Normal'], ['IMPORTANTE', 'Importante'], ['ESSEN
 const ROTULO_PRIORIDADE = { IMPORTANTE: 'Importante', ESSENCIAL: 'Essencial' };
 const PESO_PRIORIDADE = { ESSENCIAL: 0, IMPORTANTE: 1, NORMAL: 2 };
 
-let modoMercado = false;
 let timerAviso;
 
 
@@ -48,7 +47,7 @@ function opcoesUnidade(selecionada) {
 }
 
 
-/* ---------- comunicação com a API ---------- */
+/*comunicação com a API*/
 
 async function api(caminho, metodo = 'GET', corpo) {
   const opcoes = { method: metodo };
@@ -64,7 +63,7 @@ async function api(caminho, metodo = 'GET', corpo) {
   try {
     json = texto ? JSON.parse(texto) : null;
   } catch {
-    // resposta sem JSON (ex.: 204 ou corpo vazio): segue com null
+  
   }
 
   if (!resposta.ok) {
@@ -92,7 +91,6 @@ function mostrarAviso(mensagem, sucesso = false) {
   }, 3500);
 }
 
-// Roda a função e mostra o erro como aviso em vez de quebrar a tela
 async function comTratamento(funcao) {
   try {
     await funcao();
@@ -102,7 +100,7 @@ async function comTratamento(funcao) {
 }
 
 
-/* ---------- janela de diálogo ---------- */
+/* janela de dialogo */
 
 function campoDialogo(campo) {
   const controle = campo.select
@@ -139,7 +137,7 @@ function abrirDialogo(titulo, campos, aoSalvar) {
 }
 
 
-/* ---------- tela: minhas listas ---------- */
+/* tela minhas listas */
 
 function dadosDaLista(lista) {
   return `data-id="${lista.id}" data-nome="${escapar(lista.nome)}" data-limite="${lista.limite ?? ''}"`;
@@ -156,7 +154,6 @@ function botoesDaLista(lista) {
     </div>`;
 }
 
-/** Selo com a situação do orçamento (vazio se a lista não tem limite). */
 function seloOrcamento(total) {
   const limite = total.limite != null ? moeda(total.limite) : '';
   switch (total.situacaoOrcamento) {
@@ -202,7 +199,6 @@ function cartaoDoModelo({ lista, total }) {
 }
 
 async function telaHome() {
-  // as listas concluídas ficam na página de histórico; os modelos têm seção própria
   const abertas = (await api('/listas')).filter((lista) => lista.status === 'ATIVA');
   const totais = await Promise.all(abertas.map((l) => api(`/listas/${l.id}/total`)));
   const cartoes = abertas.map((lista, i) => ({ lista, total: totais[i] }));
@@ -239,7 +235,7 @@ async function telaHome() {
 }
 
 
-/* ---------- tela: detalhe da lista ---------- */
+/*tela detalhe da lista*/
 
 function linhaDoItem(item, listaId, ativa, modelo) {
   const unidade = UNIDADES[item.unidade] || escapar(item.unidade);
@@ -259,7 +255,7 @@ function linhaDoItem(item, listaId, ativa, modelo) {
       <button class="btn perigo" data-act="remover" data-id="${listaId}" data-item="${item.id}">🗑️</button>
     </div>`;
 
-  // modelos não são "comprados": sem a bolinha de marcar
+  
   const marcador = modelo ? '' : `
       <button class="chk" ${ativa ? '' : 'disabled'} data-act="toggle" data-id="${listaId}" data-item="${item.id}"
         data-comprado="${item.comprado}" data-estimado="${item.precoEstimado ?? ''}" data-produto="${escapar(item.produto)}" aria-label="Marcar como comprado">${item.comprado ? '✓' : ''}</button>`;
@@ -277,7 +273,6 @@ function linhaDoItem(item, listaId, ativa, modelo) {
 }
 
 function grupoDeCategoria(grupo, listaId, ativa, modelo) {
-  // comprados vão para o fim do grupo; entre os demais, os mais prioritários primeiro
   const itens = [...grupo.itens].sort((a, b) =>
     Number(a.comprado) - Number(b.comprado)
     || (PESO_PRIORIDADE[a.prioridade] ?? 2) - (PESO_PRIORIDADE[b.prioridade] ?? 2));
@@ -286,7 +281,7 @@ function grupoDeCategoria(grupo, listaId, ativa, modelo) {
     <ul class="itens">${itens.map((item) => linhaDoItem(item, listaId, ativa, modelo)).join('')}</ul>`;
 }
 
-/* ----- orçamento ----- */
+/* orçamento*/
 
 function mensagemOrcamento(total) {
   const limite = total.limite;
@@ -343,17 +338,15 @@ function painelDeTotais(total, modelo) {
     </div>`;
 }
 
-/* ----- exportar e compartilhar ----- */
+/*exportar lista*/
 
 function blocoExportar(id) {
   return `
     <div class="exportar no-print">
       <h2 class="cat">Exportar e compartilhar</h2>
       <div class="dois">
-        <button class="btn" data-act="imprimir">🖨️ PDF / imprimir</button>
-        <a class="btn" href="/listas/${id}/exportar/csv" download>📊 CSV</a>
-        <button class="btn" data-act="whatsapp" data-id="${id}">💬 WhatsApp</button>
-        <button class="btn" data-act="copiarTexto" data-id="${id}">📋 Copiar texto</button>
+        <button class="btn" data-act="imprimir"> PDF / imprimir</button>
+        <button class="btn" data-act="copiarTexto" data-id="${id}"> Copiar texto</button>
       </div>
     </div>`;
 }
@@ -379,7 +372,6 @@ async function telaDetalhe(id) {
        </div>`
     : `<div class="linha no-print">
          ${botaoEditar}
-         <button class="btn ${modoMercado ? 'ok' : ''}" data-act="mercado" data-id="${id}">🛒 Modo mercado</button>
          ${botaoAdicionar}
        </div>`;
 
@@ -394,7 +386,7 @@ async function telaDetalhe(id) {
       ${ativa ? acoesDoTopo : ''}
     </div>
 
-    <div class="detalhe ${modoMercado ? 'mercado' : ''}">
+    <div class="detalhe">
       <section>
         ${bannerOrcamento(total)}
         ${grupos.length
@@ -433,7 +425,7 @@ function textoDeVariacao(preco, referencia) {
 }
 
 
-/* ---------- tela: adicionar item ---------- */
+/*tela adicionar item */
 
 async function telaAdicionar(id) {
   const [lista, categorias] = await Promise.all([
@@ -534,7 +526,7 @@ async function salvarItem(form, adicionarOutro) {
 }
 
 
-/* ---------- tela: histórico de compras ---------- */
+/* tela historico de compras*/
 
 const PERIODOS = [
   ['todos', 'Todo o período'],
@@ -543,7 +535,6 @@ const PERIODOS = [
   ['ano', 'Este ano'],
 ];
 
-// compras vindas da API e filtros escolhidos na tela
 let comprasConcluidas = [];
 const filtrosHistorico = { busca: '', periodo: 'todos' };
 
@@ -565,7 +556,6 @@ function filtrarCompras(compras) {
   });
 }
 
-// quanto se economizou (ou passou) nos itens que de fato foram comprados
 function economiaDaCompra(compra) {
   return Number(compra.totalEstimadoComprados) - Number(compra.totalGasto);
 }
@@ -573,11 +563,11 @@ function economiaDaCompra(compra) {
 function agruparPorMes(compras) {
   const grupos = new Map();
   for (const compra of compras) {
-    const chave = compra.concluidaEm.slice(0, 7); // "2026-11"
+    const chave = compra.concluidaEm.slice(0, 7); 
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(compra);
   }
-  return [...grupos.entries()]; // a API já manda da mais recente para a mais antiga
+  return [...grupos.entries()]; 
 }
 
 function nomeDoMes(chave) {
@@ -647,7 +637,6 @@ function blocoDoMes([chave, compras]) {
     <div class="grade">${compras.map(cartaoDaCompra).join('')}</div>`;
 }
 
-// Redesenha só a área de resultados, para o campo de busca não perder o foco
 function desenharHistorico() {
   const area = document.querySelector('#resultado-historico');
   if (!area) return;
@@ -691,25 +680,16 @@ async function telaHistorico() {
   desenharHistorico();
 }
 
-
-/* ---------- ações dos botões ---------- */
-
 const atualizar = () => rotear();
 const estaNaHome = () => location.hash === '' || location.hash === '#/';
 
 const acoes = {
-  mercado() {
-    modoMercado = !modoMercado;
-    atualizar();
-  },
-
   renomear(dados) {
     const campos = [
       { nome: 'nome', rotulo: 'Nome', valor: dados.nome, obrigatorio: true },
       { nome: 'limite', rotulo: 'Limite de gasto (R$, opcional)', tipo: 'number', valor: dados.limite },
     ];
     abrirDialogo('Editar lista', campos, async (valores) => {
-      // limite vazio = lista sem orçamento
       await api(`/listas/${dados.id}`, 'PUT', { nome: valores.nome, limite: paraNumero(valores.limite) });
       atualizar();
     });
@@ -726,23 +706,13 @@ const acoes = {
   },
 
   imprimir() {
-    window.print(); // no diálogo de impressão, escolha "Salvar como PDF"
-  },
-
-  async whatsapp(dados) {
-    const texto = await apiTexto(`/listas/${dados.id}/exportar/texto`);
-    const janela = window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
-    if (janela) {
-      janela.opener = null;
-    } else {
-      mostrarAviso('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups ou use "Copiar texto".');
-    }
+    window.print(); 
   },
 
   async copiarTexto(dados) {
     const texto = await apiTexto(`/listas/${dados.id}/exportar/texto`);
     if (!navigator.clipboard?.writeText) {
-      mostrarAviso('Este navegador não permite copiar automaticamente. Use o botão do WhatsApp ou o CSV.');
+      mostrarAviso('Este navegador não permite copiar automaticamente. Use a opção PDF / imprimir.');
       return;
     }
     await navigator.clipboard.writeText(texto);

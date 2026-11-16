@@ -29,11 +29,11 @@ public class Lista {
     @Column(name = "concluida_em")
     private LocalDateTime concluidaEm;
 
-    /** Orçamento da lista (opcional). Null = sem limite. */
+    /* orçamento da lista (opcional) */
     @Column(precision = 10, scale = 2)
     private BigDecimal limite;
 
-    /** Modelo (ex.: "Compra do mês"): não é comprado nem concluído, só serve para gerar listas novas. */
+    /* modelo (serve para gerar listas novas) */
     @Column(nullable = false)
     private boolean modelo = false;
 

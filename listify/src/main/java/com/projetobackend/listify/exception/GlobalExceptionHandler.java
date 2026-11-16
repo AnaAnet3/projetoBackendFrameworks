@@ -17,7 +17,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("erro", e.getMessage()));
     }
 
-    // NOVO: lista concluída não pode ser alterada (regra da backend2)
     @ExceptionHandler(ConflitoException.class)
     public ResponseEntity<Map<String, Object>> conflito(ConflitoException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("erro", e.getMessage()));

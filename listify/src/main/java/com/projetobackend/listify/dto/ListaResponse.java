@@ -5,7 +5,7 @@ import com.projetobackend.listify.model.Lista;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** Os itens da lista vêm pela rota /listas/{id}/itens (ItemController). */
+/* Os itens da lista vem pela rota /listas/{id}/itens (ItemController). */
 public record ListaResponse(Long id, String nome, String status, LocalDateTime criadaEm,
                             LocalDateTime concluidaEm, BigDecimal limite, boolean modelo) {
 

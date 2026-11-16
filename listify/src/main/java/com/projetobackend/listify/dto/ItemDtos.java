@@ -14,7 +14,6 @@ public final class ItemDtos {
     private static final String PRIORIDADES = "NORMAL|IMPORTANTE|ESSENCIAL";
     private static final String MSG_PRIORIDADE = "Prioridade deve ser NORMAL, IMPORTANTE ou ESSENCIAL";
 
-    /** Entrada: adicionar item. categoriaId só é necessário se o produto ainda não existir. */
     public record ItemRequest(
             @NotBlank(message = "Informe o produto") String produto,
             Long categoriaId,
@@ -27,7 +26,7 @@ public final class ItemDtos {
             @Size(max = 255, message = "A observação pode ter no máximo 255 caracteres") String observacao,
             @Pattern(regexp = PRIORIDADES, message = MSG_PRIORIDADE) String prioridade) {}
 
-    /** Entrada: editar item (só os campos enviados são alterados). */
+
     public record ItemUpdateRequest(
             @Positive(message = "Quantidade deve ser maior que zero") BigDecimal quantidade,
             @Pattern(regexp = UNIDADES, message = MSG_UNIDADE) String unidade,
@@ -37,12 +36,10 @@ public final class ItemDtos {
             @Size(max = 255, message = "A observação pode ter no máximo 255 caracteres") String observacao,
             @Pattern(regexp = PRIORIDADES, message = MSG_PRIORIDADE) String prioridade) {}
 
-    /** Entrada: marcar/desmarcar como comprado. */
     public record CompradoRequest(
             @NotNull(message = "Informe se o item foi comprado") Boolean comprado,
             @PositiveOrZero(message = "Preço não pode ser negativo") BigDecimal precoPago) {}
 
-    /** Saída: um item. */
     public record ItemResponse(Long id, String produto, String categoria, BigDecimal quantidade,
                                String unidade, BigDecimal precoEstimado, BigDecimal precoPago,
                                boolean comprado, String marca, String observacao, String prioridade) {
@@ -57,12 +54,7 @@ public final class ItemDtos {
     /** Saída: itens agrupados por categoria (para a tela de detalhe). */
     public record GrupoCategoria(String categoria, List<ItemResponse> itens) {}
 
-    /**
-     * Saída: totais da lista.
-     *
-     * limite é o orçamento da lista (null se não houver). situacaoOrcamento diz como a lista
-     * está em relação a ele: SEM_LIMITE, DENTRO, PERTO_DO_LIMITE, ESTIMADO_ESTOUROU ou GASTO_ESTOUROU.
-     */
+    
     public record TotalResponse(BigDecimal totalEstimado, BigDecimal totalGasto,
                                 long itensComprados, long totalItens,
                                 BigDecimal limite, String situacaoOrcamento) {
@@ -73,7 +65,7 @@ public final class ItemDtos {
         public static final String ESTIMADO_ESTOUROU = "ESTIMADO_ESTOUROU";
         public static final String GASTO_ESTOUROU = "GASTO_ESTOUROU";
 
-        /** A partir de 90% do limite (no estimado ou no gasto) já vale um aviso. */
+        /** Aviso a partir de 90% do limite  */
         private static final BigDecimal LIMIAR_AVISO = new BigDecimal("0.90");
 
         public static String situacao(BigDecimal limite, BigDecimal estimado, BigDecimal gasto) {
@@ -87,6 +79,5 @@ public final class ItemDtos {
         }
     }
 
-    /** Saída: categoria (para o select da tela de adicionar item). */
     public record CategoriaResponse(Long id, String nome) {}
 }
