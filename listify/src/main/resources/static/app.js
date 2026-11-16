@@ -240,7 +240,8 @@ async function telaHome() {
 function linhaDoItem(item, listaId, ativa, modelo) {
   const unidade = UNIDADES[item.unidade] || escapar(item.unidade);
   const precoPago = item.comprado && item.precoPago != null ? ` · pago ${moeda(item.precoPago)}` : '';
-  const subtotal = item.quantidade * (item.precoPago ?? item.precoEstimado ?? 0);
+  const preco = item.precoPago ?? item.precoEstimado ?? 0;
+  const subtotal = item.unidade === 'kg' ? preco : item.quantidade * preco;
 
   const marca = item.marca ? ` <span class="marca">${escapar(item.marca)}</span>` : '';
   const rotulo = ROTULO_PRIORIDADE[item.prioridade];
@@ -264,7 +265,11 @@ function linhaDoItem(item, listaId, ativa, modelo) {
     <li class="item ${item.comprado ? 'c' : ''}">${marcador}
       <div class="info">
         <div><span class="nome">${escapar(item.produto)}</span>${marca}${selo}</div>
-        <div class="mudo peq">${item.quantidade} ${unidade} × ${moeda(item.precoEstimado)}${precoPago}</div>
+        <div class="mudo peq">
+    ${item.quantidade} ${unidade}
+    ${item.unidade === 'kg' ? `· ${moeda(item.precoEstimado)}` : `× ${moeda(item.precoEstimado)}`}
+    ${precoPago}
+</div>
         ${observacao}
       </div>
       <b>${moeda(subtotal)}</b>

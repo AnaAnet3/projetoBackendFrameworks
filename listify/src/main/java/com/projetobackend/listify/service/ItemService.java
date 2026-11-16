@@ -106,12 +106,13 @@ public class ItemService {
         List<ItemLista> itens = itemRepo.findByListaIdOrderByProdutoNomeAsc(listaId);
 
         BigDecimal estimado = itens.stream()
-                .map(i -> subtotal(i.getQuantidade(), i.getPrecoEstimado()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        .map(i -> subtotal(i, i.getPrecoEstimado()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         BigDecimal gasto = itens.stream()
-                .filter(ItemLista::isComprado)
-                .map(i -> subtotal(i.getQuantidade(), i.getPrecoPago()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        .filter(ItemLista::isComprado)
+        .map(i -> subtotal(i, i.getPrecoPago()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
         long comprados = itens.stream().filter(ItemLista::isComprado).count();
 
         estimado = estimado.setScale(2, RoundingMode.HALF_UP);
@@ -159,7 +160,15 @@ public class ItemService {
         return limpo.isEmpty() ? null : limpo;
     }
 
-    private BigDecimal subtotal(BigDecimal quantidade, BigDecimal precoUnitario) {
-        return precoUnitario == null ? BigDecimal.ZERO : quantidade.multiply(precoUnitario);
+private BigDecimal subtotal(ItemLista item, BigDecimal preco) {
+    if (preco == null) {
+        return BigDecimal.ZERO;
     }
+
+    if ("kg".equalsIgnoreCase(item.getUnidade())) {
+        return preco;
+    }
+
+    return item.getQuantidade().multiply(preco);
+}
 }
