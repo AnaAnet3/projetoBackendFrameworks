@@ -95,6 +95,9 @@ main.cont {
 .topo .marca {
   font: 700 1.25rem Fraunces,serif;
   color: var(--pri-fg);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
 }
 
 .menu {

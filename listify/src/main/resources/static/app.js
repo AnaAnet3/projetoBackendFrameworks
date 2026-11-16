@@ -228,7 +228,7 @@ async function telaHome() {
       : '<p class="vazio">Nenhuma lista ativa. Crie uma acima!</p>'}
 
     ${modelos.length ? `
-      <h2 class="secao">📌 Modelos</h2>
+      <h2 class="secao"> Modelos</h2>
       <p class="mudo peq" style="margin:0 0 1rem">Listas prontas para reutilizar, como a "Compra do mês". Use um modelo para criar uma lista nova com os mesmos itens.</p>
       <div class="grade">${modelos.map(cartaoDoModelo).join('')}</div>`
       : '<p class="mudo peq" style="margin-top:1.5rem">Dica: use 📌 em uma lista para guardá-la como modelo e reaproveitá-la todo mês.</p>'}
@@ -715,9 +715,8 @@ const acoes = {
     });
   },
 
-  async salvarModelo(dados) {
-    const modelo = await api(`/listas/${dados.id}/salvar-modelo`, 'POST');
-    mostrarAviso(`Modelo "${modelo.nome}" criado. Ele aparece na tela de listas.`, true);
+    async salvarModelo(dados) {
+    await api(`/listas/${dados.id}/salvar-modelo`, 'POST');
     if (estaNaHome()) atualizar();
   },
 
